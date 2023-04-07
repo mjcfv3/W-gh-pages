@@ -1,0 +1,46 @@
+<!doctype html>
+<canvas id=canvas width=1200 height=500 style='border:1px solid'></canvas>
+<script src='../w.js'></script>
+
+<br>
+<br>
+
+<script style='display:block;width:1160px;background:#555;color:#fff;font:15px/20px courier; padding:0 20px;white-space:pre'>
+
+// Set up the scene with a cube at the center
+onload = () => {
+  W.reset(canvas);
+  W.camera({z:2});
+  W.light({x:.5,y:.5,z:.5});
+  W.cube({n:"cube", b:"5af", rx: 45});
+}
+
+// Direction keys (https://xem.github.io/articles/jsgamesinputs.html)
+u=r=d=l=0;
+onkeydown=onkeyup=e=>this['lurd************************l**r************l*d***u**u'[e.which-37]]=+!!e.type[5];
+
+// Create a custom transform matrix for the cube
+modelMatrix = new DOMMatrix();
+
+// Draw
+draw = () => {
+
+  // Loop
+  requestAnimationFrame(draw);
+
+  // Compute rotation axis from the arrow keys
+  let axis = new DOMPoint(rx = d - u, ry = r - l, 0);
+
+  // Apply the inverse of the existing model matrix to the new rotation axis to get back to the the World coordinates
+  let newAxis = axis.matrixTransform((new DOMMatrix(modelMatrix)).invertSelf());
+
+  // Apply the new rotation along this transformed axis up to 5 degrees per frame
+  modelMatrix.rotateAxisAngleSelf(newAxis.x, newAxis.y, newAxis.z, Math.hypot(rx, ry) * 5);
+
+  // Move the cube
+  W.move({n:"cube", M: modelMatrix});
+};
+draw();
+
+</script>
+

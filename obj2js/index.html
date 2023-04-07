@@ -1,0 +1,191 @@
+<!doctype html>
+<script src="parse.js"></script>
+<h2>OBJ to WebGL buffer converter</h2>
+<b>OBJ file</b>: <button id=mario>Mario</button> <button id=yoshi>Yoshi</button> <button id=coin>Coin block (no texture)</button>  <button id=cube>Cube (no uv)</button> <button id=wolf>Wolf</button> or <input type=file id=obj>
+<p><b>Options</b>: float range <input type=number value=10 id=scale onchange="convert()" oninput="convert()" min=1>, 
+max decimals (vertices): <input type=number value=2 id=round1 onchange="convert()" oninput="convert()" min=0 max=10>, 
+max decimals (textures): <input type=number value=2 id=round2 onchange="convert()" oninput="convert()" min=1 max=10>,
+Unicode precision: <input type=number value=127 id=unicode onchange="convert()" oninput="convert()" min=1>, <input type=checkbox checked id=indexed onchange="convert()"> Indexed
+<input type=checkbox id=s onchange="convert()"> Smooth <input type=checkbox id=an onchange=convert()>Animated
+<img src="mario.png" id=texture hidden>
+<p>
+<table>
+<tr><th>Original (<i id=out1i>0 bytes</i>)<th>floats (<i id=out3i>0 bytes</i>)<th>Unicode (<i id=out4i>0 bytes</i>)
+<tr><td><textarea id=out1 rows=20></textarea><td><textarea id=out3 rows=20></textarea><td><textarea id=out4 rows=20></textarea>
+<tr><th colspan=3>Preview: original / floats / Unicode
+<tr><td colspan=3><center><canvas id=a width=900 height=350></canvas>
+</table>
+<center>Original: direct copy of the OBJ values. Floats / Unicode: vertices centered on the origin + lossy compression + model size = 1
+
+<script>
+gl = a.getContext("webgl2");
+converting = 0;
+convert = () => {
+  if(converting) return;
+  converting = 1;
+  setTimeout(()=>{converting=0},300);
+  W.reset(a);
+
+  texture.src=name + ".png";
+  texture.onload = texture.onerror = e => {
+  
+  //console.log(file);
+    
+    parseOBJ(file).then(x=>{
+      size = x[1].size;
+      //console.log(z=x);
+      //console.log(z[0].groups[0]);
+      
+      if(!indexed.checked){
+      
+        s.checked = false;
+      
+      
+      
+        // original unindexed
+        out1.innerHTML = `W.add("${name}_original", {
+  vertices: [${x[0].groups[0].originalv.map(x=>+x).join(",")}]${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].vt.map(x=>+x).join(",") + "]") : ""}
+});`;
+        out1.innerHTML = out1.innerHTML.replace(/(\D)0\./g,"$1.");
+        out1i.innerHTML = new Intl.NumberFormat("en-US").format(out1.innerHTML.length) + " bytes";
+      
+
+        // same centered and resized (for the demo)
+        originalcentered = `W.add("${name}_original"; {
+  vertices: [${x[0].groups[0].v.map(x=>+((x/size))).join(",")}]${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].vt.map(x=>+((x))).join(",") + "]") : ""}
+});`;
+      
+      // float unindexed
+      out3.innerHTML = `W.add("${name}", {
+  vertices: [${x[0].groups[0].v.map(x=>+(((x/size)*(+scale.value)).toFixed(round1.value))).join(",")}]${scale.value!=1?(".map(x=>x/"+scale.value+")"):""}${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].vt.map(x=>+((x).toFixed(round2.value))).join(",") + "]") : ""}
+});`;
+      out3.innerHTML = out3.innerHTML.replace(/(\D)0\./g,"$1.");
+      out3i.innerHTML = new Intl.NumberFormat("en-US").format(out3.innerHTML.length) + " bytes";
+      
+      // unicode unindexed
+      out4.innerHTML = `W.add("${name}_txt", {
+  vertices: [...'${x[0].groups[0].v.flat().map(x=>String.fromCodePoint((x*unicode.value/size).toFixed(0)).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\0/g,"\u0001")).join("")}'].map(a=>(a.codePointAt())/${unicode.value})${x[0].groups[0].vt.length ? (",\n  uv: [...'" + x[0].groups[0].vt.flat().map(x=>String.fromCharCode((x*unicode.value).toFixed(0)).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\0/g,"\u0001")).join("") + "]'].map(a=>(a.codePointAt())/"+unicode.value+")") : ""}
+});`;
+      out4i.innerHTML = new Intl.NumberFormat("en-US").format((new TextEncoder().encode(out4.innerHTML)).length) + " bytes";
+    }
+    
+    else {
+      
+      // original indexed
+      out1.innerHTML = `W.add("${name}_original", {
+  vertices: [${x[0].groups[0].indexoriginalv.map(x=>+x).join(",")}]${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].indexvt.map(x=>+x).join(",") + "]") : ""},
+  indices: [${x[0].groups[0].indices.map(x=>+x).join(",")}]
+});`;
+        out1.innerHTML = out1.innerHTML.replace(/(\D)0\./g,"$1.");
+        out1i.innerHTML = new Intl.NumberFormat("en-US").format(out1.innerHTML.length) + " bytes";
+        
+        // Original indexed centered  (for the demo)
+        originalindexedcentered = `W.add("${name}_original", {
+  vertices: [${x[0].groups[0].indexv.map(x=>+(x/size)).join(",")}]${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].indexvt.map(x=>+x).join(",") + "]") : ""},
+  indices: [${x[0].groups[0].indices.map(x=>+x).join(",")}]
+});`;
+        originalindexedcentered = originalindexedcentered.replace(/(\D)0\./g,"$1.");
+        
+        
+        // float indexed
+        out3.innerHTML = `W.add("${name}", {
+  vertices: [${x[0].groups[0].indexv.map(x=>+(((x/size)*(+scale.value)).toFixed(round1.value))).join(",")}]${scale.value!=1?(".map(x=>x/"+scale.value+")"):""}${x[0].groups[0].vt.length ? (",\n  uv: [" + x[0].groups[0].indexvt.map(x=>+((x).toFixed(round2.value))).join(",") + "]") : ""},
+  indices: [${x[0].groups[0].indices.map(x=>+x).join(",")}]
+});`;
+        out3.innerHTML = out3.innerHTML.replace(/(\D)0\./g,"$1.");
+        out3i.innerHTML = new Intl.NumberFormat("en-US").format(out3.innerHTML.length) + " bytes";
+        
+        
+        
+        // unicode indexed
+        out4.innerHTML = `W.add("${name}_txt", {
+  vertices: [...'${x[0].groups[0].indexv.map(x=>String.fromCharCode((x*unicode.value/size).toFixed(0)).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\0/g,"\u0001")).join("")}'].map(a=>(a.codePointAt())/${unicode.value})${x[0].groups[0].vt.length ? (",\n  uv: [...'" + x[0].groups[0].indexvt.map(x=>String.fromCharCode((x*unicode.value).toFixed(0)).replace(/\\/g,"\\\\").replace(/'/g,"\\'").replace(/\r/g,"\\r").replace(/\n/g,"\\n").replace(/\0/g,"\u0001")).join("") + "'].map(a=>(a.codePointAt())/"+unicode.value+")") : ""},
+  indices: [${x[0].groups[0].indices.join(",")}]
+});`;
+      out4.innerHTML = out4.innerHTML.replace(/(\D)0\./g,"$1.");
+      out4i.innerHTML = new Intl.NumberFormat("en-US").format(out4.innerHTML.length) + " bytes";
+  }
+
+      //console.log(out1.value);
+      //eval(originalcentered);
+      eval(originalindexedcentered);
+      eval(out3.value);
+      eval(out4.value);
+      //console.log(W.mario);
+      W.camera({x:0,z:100,fov:13});
+      W.light({x:0,y:.8,z:-.8});
+      W.group({n:"g0", x:-35,rx:name=="mario"?-90:0,ry:name=="mario"||name=="yoshi"?180:0});
+      W.group({n:"g1", x:-1,rx:name=="mario"?-90:0,ry:name=="mario"||name=="yoshi"?180:0});
+      W.group({n:"g2", x:33,rx:name=="mario"?-90:0,ry:name=="mario"||name=="yoshi"?180:0});
+      setTimeout(()=>{
+      
+        W[name+"_original"]({n:"obj0",g:"g0",x:-15,y:-15,z:-15,w:30,h:30,d:30,b:"777",t: texture, mix: e.type==="error"?1:0, s: +!!s.checked});
+        W[name]({n:"obj1",g:"g1",x:-15,y:-15,z:-15,w:30,h:30,d:30,b:"777",t: texture, mix: e.type==="error"?1:0, s: +!!s.checked});
+        W[name+"_txt"]({n:"obj2",g:"g2",x:-15,y:-15,z:-15,w:30,h:30,d:30,b:"777",t: texture, mix: e.type==="error"?1:0, s: +!!s.checked});
+        //setTimeout(()=>{
+        if(an.checked){
+          W.move({n:"g0",rx:3600,rz:3600,a:100000},100);
+          W.move({n:"g1",rx:3600,rz:3600,a:100000},100);
+          W.move({n:"g2",rx:3600,rz:3600,a:100000},100);
+        }
+      },100);
+    })
+
+  }
+
+}
+
+mario.onclick = async () => {
+  name = "mario";
+  file = await(await fetch("mario.obj")).text();
+  convert();
+}
+
+yoshi.onclick = async () => {
+  name = "yoshi";
+  file = await(await fetch("yoshi.obj")).text();
+  convert();
+}
+
+coin.onclick = async () => {
+  name = "coin";
+  file = await(await fetch("coin.obj")).text();
+  convert();
+}
+
+cube.onclick = async () => {
+  name = "cubeobj";
+  file = await(await fetch("cube.obj")).text();
+  convert();
+}
+
+wolf.onclick = async () => {
+  name = "wolf";
+  file = await(await fetch("wolf.obj")).text();
+  convert();
+}
+
+obj.onload = obj.oninput = () => {
+  if (obj.files && obj.files[0]) {
+    var myFile = obj.files[0];
+    var reader = new FileReader();
+    
+    reader.addEventListener('load', function (e) {
+      file = e.target.result;
+      name = obj.files[0].name.replace(/\.obj/i,"");
+      convert();
+    });
+    
+    reader.readAsBinaryString(myFile);
+  }   
+}
+</script>
+<style>
+body { font-family: arial; font-size: 11px; }
+textarea { width: 31vw; height: calc((100vh - 390px - 17em)); font-size: 10px;line-height: 9px }
+input, button { font-size: 11px; }
+#round1, #round2, #scale, #unicode { width: 35px }
+canvas { border: 1px solid; max-width: 98vw; }
+#indexed:not(:checked) ~ #s { cursor: not-allowed }
+</style>
+<script src="../w.js"></script>
